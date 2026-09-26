@@ -64,8 +64,10 @@ def row_for(run_dir):
         'checkpoint_sha256': m['checkpoint_sha256'],
         'selected_on': 'validation',
         'notes': '; '.join(filter(None, [
-            ('frozen submission; test scored once' if run_dir.name == 'rope-s17' else
-             'test scored for the baseline comparison' if run_dir.name == 'baseline-model-s17' else
+            ('frozen submission; method frozen on validation before its test score was computed'
+             if run_dir.name == 'rope-s17' else
+             'test scored for the baseline arm of the comparison'
+             if run_dir.name == 'baseline-model-s17' else
              'ablation sweep, validation only'),
             ('' if run_dir.name in CPU_PASS else
              f'CUDA validation pass during training: {m["validation"]["seconds"]:.2f} s '

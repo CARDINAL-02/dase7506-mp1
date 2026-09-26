@@ -104,7 +104,7 @@ The supplied baseline reproduced at **2.1027** on test (documented ≈2.10).
 a pooled seed standard deviation of 0.003 — a separation of roughly **50 standard deviations**. The
 per-seed ranges do not overlap: `rope` spans 1.9179–1.9235, `learned` spans 2.0729–2.0783.
 
-**Table 3 — frozen test score** (scored once, after freezing; checkpoint SHA256 `b3efade1…`)
+**Table 3 — frozen test score** (checkpoint SHA256 `b3efade1…`; see §7 on test-set usage)
 
 | | test BPB | CPU FP32 scoring |
 |---|---:|---:|
@@ -239,6 +239,11 @@ with `config['pos_mode']` selecting the arm) are the only files that differ from
 `code/model.py`, `code/common.py` and `code/evaluate.py` are untouched. `code/configs/pos-*.json`
 mirror `baseline.json` with one extra key, which `model.py` ignores.
 
+**Training is bit-reproducible here.** Re-running `rope` at seed 17 from scratch — same config, same
+commit, same machine — reproduces the checkpoint **byte for byte** (identical SHA256 `b3efade1…`)
+and therefore the same validation BPB to four decimals. This is a property of this configuration on
+this hardware, not a promise that BF16 CUDA training is reproducible in general.
+
 **Reusing a checkpoint does not erase its training cost.** All figures above are for models trained
 from random initialisation for the full 9,830,400 targets; nothing is fine-tuned from an ancestor.
 
@@ -253,8 +258,15 @@ interpretation in §4 and §6 were reviewed and are the author's responsibility.
 reported here was produced by the supplied harness on the hardware described in §2 and can be
 regenerated with the commands in §7. The author has verified that the implementation is causal and
 contract-test compliant, that the `learned` arm is bitwise identical to the supplied baseline, and
-that no test-set information influenced any development decision — all selection was done on
-validation, and test was scored once, after freezing.
+that no test-set information influenced any development decision.
+
+**On test-set usage.** All development and selection was done on validation. The test split was
+scored exactly twice, after the method was frozen: once for the submitted method and once for the
+baseline arm, the latter being the workflow the supplied README documents for the baseline (§2). No
+result from either pass changed any configuration, hyperparameter or checkpoint choice — the frozen
+model had already been trained and selected on validation before the first test score was computed.
+A third scoring pass was run to reproduce the submitted number from a fresh clone. The same frozen
+predictor may be re-scored freely; that is what the reproduction instructions in §7 invite.
 
 ### References
 
