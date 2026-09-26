@@ -68,6 +68,8 @@ def row_for(run_dir):
              if run_dir.name == 'rope-s17' else
              'test scored for the baseline arm of the comparison'
              if run_dir.name == 'baseline-model-s17' else
+             'reproducibility re-run of rope-s17; reproduced the checkpoint byte for byte'
+             if run_dir.name == 'rope-s17-repro' else
              'ablation sweep, validation only'),
             ('' if run_dir.name in CPU_PASS else
              f'CUDA validation pass during training: {m["validation"]["seconds"]:.2f} s '
