@@ -1,0 +1,4 @@
+# common.load_data() SHA256-verifies every file in code/data/ against
+# data/manifest.json. Any line-ending conversion on checkout changes the bytes
+# and makes the evaluator reject the benchmark, so disable it everywhere.
+* -text
