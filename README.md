@@ -32,6 +32,8 @@ training runs is in [RUN_LOG.csv](RUN_LOG.csv).
 | `make_run_log.py` | regenerates `RUN_LOG.csv` from the run artefacts |
 | `measure_peak_ram.py` | CPU peak-RAM probe (not instrumented by the harness) |
 | `explore_ensemble.py` | the ensemble probe described in §5.1 of the report |
+| `CODE_WALKTHROUGH.md` | line-by-line explanation of `rope.py` and `student.py`, with 10 self-test questions |
+| `trace_rope.py` | regenerates every number quoted in the walkthrough |
 | `code/` | the code package |
 | `GUIDE.md` | the course assignment guide, as supplied |
 
