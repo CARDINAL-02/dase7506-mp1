@@ -28,6 +28,22 @@ COLUMNS = ['run_id', 'code_commit', 'method', 'config_path', 'seed', 'parent_che
 CPU_PASS = {   # validation_s, test_s, peak_RAM_GiB -- measure_peak_ram.py / evaluate.py
     'baseline-model-s17': (9.21, 10.51, 1.784),
     'rope-s17': (10.77, 11.89, 1.785),
+    'long-baseline-model-s17': (6.71, 10.47, 'not measured'),
+    'long-rope-s17': (7.87, 11.93, 1.737),
+}
+BUDGET_RATIO = {   # CPU validation scoring, back-to-back against the baseline model
+    'rope-s17': 1.13, 'long-rope-s17': 1.17,
+}
+NOTE = {
+    'baseline-model-s17': 'initial baseline arm; test scored with the method frozen',
+    'rope-s17': 'superseded first submission (1,200 steps); kept for the length comparison',
+    'long-baseline-model-s17': 'matched-target baseline for the submitted model',
+    'long-rope-s17': 'FROZEN SUBMISSION (1.7228 test BPB)',
+    'rope-s17-repro': 'reproducibility re-run of rope-s17',
+    'rope-s17-long': 'reproducibility probe: trained under concurrent CPU load, hence the '
+                     '~7e-4 weight deviation described in the report',
+    'repro-a': 'reproducibility probe: identical arguments to long-rope-s17',
+    'repro-b': 'reproducibility probe: same arguments, different --eval-every',
 }
 
 
@@ -64,18 +80,12 @@ def row_for(run_dir):
         'checkpoint_sha256': m['checkpoint_sha256'],
         'selected_on': 'validation',
         'notes': '; '.join(filter(None, [
-            ('frozen submission; method frozen on validation before its test score was computed'
-             if run_dir.name == 'rope-s17' else
-             'test scored for the baseline arm of the comparison'
-             if run_dir.name == 'baseline-model-s17' else
-             'reproducibility re-run of rope-s17; reproduced the checkpoint byte for byte'
-             if run_dir.name == 'rope-s17-repro' else
-             'ablation sweep, validation only'),
+            NOTE.get(run_dir.name, 'ablation sweep, validation only'),
             ('' if run_dir.name in CPU_PASS else
              f'CUDA validation pass during training: {m["validation"]["seconds"]:.2f} s '
              f'(not the budget metric)'),
-            (f'CPU pass is {cpu_val_s / CPU_PASS["baseline-model-s17"][0]:.2f}x the baseline, budget 5x'
-             if run_dir.name == 'rope-s17' else ''),
+            (f'CPU scoring {BUDGET_RATIO[run_dir.name]:.2f}x the baseline, budget 5x'
+             if run_dir.name in BUDGET_RATIO else ''),
         ])),
     }
 

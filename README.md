@@ -1,24 +1,37 @@
 # DASE7506 MP1 — submission
 
-**Frozen test BPB: 1.9527** · supplied baseline: 2.1027 · **−0.1500 BPB (−7.13%)**
+**Frozen test BPB: 1.7228** (39,321,600 processed targets)
+
+| arm | targets | test BPB |
+|---|---:|---:|
+| initial baseline (`model.py`, 1,200 steps) | 9,830,400 | 2.1027 |
+| matched-target baseline (`model.py`, 4,800 steps) | 39,321,600 | 1.7788 |
+| **submitted: RoPE, 4,800 steps** | 39,321,600 | **1.7228** |
 
 Method: replace the baseline's learned absolute position embedding with rotary position embeddings
 (RoPE), applied to queries and keys. This removes a 256×128 table (32,768 parameters, 3.0% of the
 model) and builds *relative* position structure into attention instead of asking the optimiser to
-discover it.
+discover it. At matched processed targets it is worth **−0.056 BPB**.
 
-The full write-up, including the ablation, the cost analysis and the limitations, is in
-[REPORT.md](REPORT.md). Per-run accounting is in [RUN_LOG.csv](RUN_LOG.csv).
+The supplied recipe's 1,200-step default is far below where the loss curve flattens, so the submitted
+model also trains 4× longer — that accounts for the rest of the movement against the initial
+baseline. It is a cost decision, not an algorithmic contribution, and the report says so.
+
+The full write-up — including the ablation across two training lengths, the budget analysis, two
+measured dead ends, and the limitations — is in [REPORT.md](REPORT.md). Per-run accounting for all 24
+training runs is in [RUN_LOG.csv](RUN_LOG.csv).
 
 ## Layout
 
 | Path | |
 |---|---|
 | `REPORT.md` | the report (≤10 pages) |
-| `RUN_LOG.csv` | one row per experiment |
-| `run_matrix.sh` | reproduces all ten training runs |
+| `RUN_LOG.csv` | one row per experiment, all 24 runs |
+| `checkpoints/` | `rope-s17-4800` (submitted), `baseline-s17-4800`, `baseline-s17-1200` |
+| `run_matrix.sh` | reproduces the ten 1,200-step runs |
 | `make_run_log.py` | regenerates `RUN_LOG.csv` from the run artefacts |
 | `measure_peak_ram.py` | CPU peak-RAM probe (not instrumented by the harness) |
+| `explore_ensemble.py` | the ensemble probe described in §5.1 of the report |
 | `code/` | the code package |
 | `GUIDE.md` | the course assignment guide, as supplied |
 
@@ -49,27 +62,34 @@ CPU**. Nothing here needs network access beyond installing the dependencies.
 
 ```bash
 cd code
-python evaluate.py --checkpoint ../checkpoints/rope-s17/checkpoint.pt \
+python evaluate.py --checkpoint ../checkpoints/rope-s17-4800/checkpoint.pt \
   --device cpu --precision fp32 --threads 8 --split test
 ```
 
 This writes `test_cpu_fp32.json` beside the checkpoint. The **`bpb` field** in that file is the
-submitted score, **1.9527**. The checkpoint's SHA256 is recorded in `RUN_LOG.csv` and echoed into
-the JSON, so the number is tied to a specific artefact.
+submitted score, **1.7228**. The checkpoint's SHA256 is recorded in `RUN_LOG.csv` and echoed into the
+JSON, so the number is tied to a specific artefact.
 
-For the baseline arm of the comparison, the same command on
-`../checkpoints/baseline-model-s17/checkpoint.pt` gives **2.1027**.
-
-## Retrain everything
+The same command on the two comparison arms:
 
 ```bash
-bash run_matrix.sh          # ten runs, ~4.25 min GPU training, ~7 min wall clock on an RTX 3060
+python evaluate.py --checkpoint ../checkpoints/baseline-s17-4800/checkpoint.pt \
+  --device cpu --precision fp32 --threads 8 --split test    # 1.7788, matched targets
+python evaluate.py --checkpoint ../checkpoints/baseline-s17-1200/checkpoint.pt \
+  --device cpu --precision fp32 --threads 8 --split test    # 2.1027, initial baseline
+```
+
+## Retrain
+
+```bash
+bash run_matrix.sh          # the ten 1,200-step runs
 python make_run_log.py      # regenerate RUN_LOG.csv
 ```
 
-Each run is 1,200 steps × 32 sequences × 256 targets = 9,830,400 processed targets from random
-initialisation. `train.py` refuses to write into a non-empty `--run-dir`, so every run needs a fresh
-directory.
+The 4,800-step runs used the same commands with `--steps 4800` and `long-` prefixed run directories;
+`RUN_LOG.csv` records every one. Each run is trained from random initialisation — 1,200 or 4,800
+steps × 32 sequences × 256 targets. `train.py` refuses to write into a non-empty `--run-dir`, so every
+run needs a fresh directory. Total GPU training across all 24 logged runs is 27.2 minutes.
 
 ## Reproducibility notes
 
@@ -81,19 +101,40 @@ directory.
   derives its frequency schedule from `head_dim` at runtime for this reason, and its tables are
   non-persistent buffers so they stay out of the checkpoint.
 - The `learned` arm is bitwise identical to `model.py`'s GPT — verified by identical `state_dict`
-  keys, identical outputs after loading the baseline's weights, and an identical validation BPB
-  (2.0729 for both `learned`-s17 and the supplied baseline). The ablation therefore changes only how
-  position reaches attention.
+  keys, identical outputs after loading the baseline's weights, and an identical validation BPB at
+  both training lengths (2.0729 and 1.7532 for `learned`-s17 and the supplied baseline alike). The
+  ablation therefore changes only how position reaches attention.
+- Training is deterministic when the machine is left alone: three runs of `rope`/seed 17 at 4,800
+  steps with identical arguments produced byte-identical checkpoints. One further run, trained while
+  a second process was busy on the same machine, deviated by ~7e-4 per weight — worth 1.8e-5 BPB, two
+  orders of magnitude below the seed spread. The report's §7 documents this; the earlier claim of
+  unconditional bit-reproducibility was too strong and has been withdrawn.
+
+## Reused work
+
+- **`code/student.py` is a modified copy of the supplied `code/model.py`.** The `Block` and `GPT`
+  classes are the course baseline's, carried over unchanged; the additions are a `pos_mode` switch
+  and a conditional position embedding. The `learned` arm is bit-identical to the original — see
+  §2.1 of the report.
+- **The rotary position embedding method is not mine.** It is Su et al., *RoFormer: Enhanced
+  Transformer with Rotary Position Embedding*, arXiv:2104.09864.
+- **`code/common.py`, `code/evaluate.py`, `code/train.py`, `code/tests/` and `code/data/` are the
+  course's**, used unmodified. `rope.py`, `run_matrix.sh`, `make_run_log.py`, `measure_peak_ram.py`
+  and `explore_ensemble.py` are new work for this submission.
+- **WikiText-2** is Merity et al., arXiv:1609.07843; data and tokenizer are redistributed unmodified
+  as supplied. See the data attribution below.
 
 ## Acknowledgement of AI assistance
 
 Claude (Anthropic) was used as a coding and analysis assistant: drafting `code/rope.py` and the
-`pos_mode` switch in `code/student.py`; writing `run_matrix.sh`, `measure_peak_ram.py` and
-`make_run_log.py`; and drafting `REPORT.md`. The experimental design — the choice of RoPE, the
-three-arm ablation with a parameter-matched lower-bound control, the seed-selection policy and the
-interpretation — was reviewed and remains the author's responsibility. Every reported number was
-produced by the supplied harness and can be regenerated with the commands above; no test-set
-information influenced any development decision. See §7 of the report for the full statement.
+`pos_mode` switch in `code/student.py`; writing `run_matrix.sh`, `measure_peak_ram.py`,
+`make_run_log.py` and `explore_ensemble.py`; and drafting `REPORT.md`. The experimental design — the
+choice of RoPE, the three-arm ablation with a parameter-matched lower-bound control, running the
+sweep at two training lengths, the seed-selection policy, the rejection of the ensemble on budget
+grounds, and the interpretation — was reviewed and remains the author's responsibility. Every
+reported number was produced by the supplied harness and can be regenerated with the commands above;
+no test-set information influenced any development decision. See §7 of the report for the full
+statement.
 
 ## Data attribution
 
