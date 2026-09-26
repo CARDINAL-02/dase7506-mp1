@@ -1,0 +1,5 @@
+# code/.gitignore only covers code/; these apply to the package root, where the
+# helper scripts live. Both patterns were found tracked in the repo before this
+# file existed.
+__pycache__/
+*.pyc
