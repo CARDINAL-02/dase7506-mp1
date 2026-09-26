@@ -118,7 +118,7 @@ deviation (0.0074).
 
 | gap | @1,200 steps | @4,800 steps | |
 |---|---:|---:|---|
-| `learned − none` (value of position information) | +0.0400 | **+0.0857** | ↑ grows |
+| `learned − none` (value of position information) | +0.0399 | **+0.0856** | ↑ grows |
 | `learned − rope` (extra value of *relative* position) | +0.1536 | **+0.0456** | ↓ shrinks |
 
 Per seed, the `rope` advantage over `learned` falls from 0.1507 / 0.1497 / 0.1604 to
@@ -126,7 +126,7 @@ Per seed, the `rope` advantage over `learned` falls from 0.1507 / 0.1497 / 0.160
 
 The reading is consistent and, I think, the main scientific content of this study:
 
-- **Position information of any kind becomes more valuable as training lengthens** (+0.040 → +0.086).
+- **Position information of any kind becomes more valuable as training lengthens** (+0.0399 → +0.0856).
   A model with more optimisation steps can actually exploit position; one that is starved cannot.
 - **The *extra* value of encoding position relatively rather than absolutely shrinks with training**
   (+0.154 → +0.046), because a longer-trained model can partly learn the relative structure that
