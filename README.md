@@ -125,13 +125,11 @@ run needs a fresh directory.
 
 ## Acknowledgement of AI assistance
 
-Claude (Anthropic) was used as a coding and analysis assistant: drafting `code/rope.py`, the model
-and training changes; writing `run_matrix.sh`, `measure_peak_ram.py`, `make_run_log.py` and
-`explore_ensemble.py`; and drafting `REPORT.md`. The experimental design — the diagnosis that
-regularisation rather than capacity binds, the choice of dropout, the ablation structure, the seed
-policy, the rejection of the ensemble on budget grounds, and the interpretation — was reviewed and
-remains the author's responsibility. Every reported number was produced by the supplied harness and
-can be regenerated with the commands above.
+Claude (Anthropic) was used as a coding and analysis assistant: it wrote `code/rope.py`, the model
+and training changes and the experiment scripts, and drafted `REPORT.md`. The author set the
+objectives and the direction of the work, reviewed the changes, and is responsible for what is
+submitted. Every reported number was produced by the supplied harness and can be regenerated with
+the commands above.
 
 ## Data attribution
 

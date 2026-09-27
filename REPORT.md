@@ -24,9 +24,9 @@ inference assets ≤ 64 MiB — and training is explicitly unrestricted. It is e
 wrong, and the measurements say so.**
 
 The supplied recipe trains for 1,200 steps × 32 × 256 = 9,830,400 targets, which over a
-3,613,343-token corpus is **10.9 epochs**. Our first submission (v1) changed only the position
-encoding, kept the baseline's 1.05M parameters, and reached 1.9527 test BPB. Simply training it
-longer helped: 4,800 steps (21.8 epochs) took it to 1.7228.
+3,613,343-token corpus is **10.9 epochs**. The first change tried here was to the position encoding
+alone, at the baseline's 1.05M parameters: 1.9527 test BPB at 1,200 steps, and 1.7228 once trained
+for 4,800 steps (21.8 epochs). That second figure was the v1 submission.
 
 But the obvious next move — use the budget, make the model bigger — **made things worse**:
 
@@ -51,7 +51,7 @@ v1 used 6% — is not the lever it appears to be. The lever is regularisation.
 1. **Dropout** (`config['dropout']`), on the embedding output and on both residual branches of every
    block. This is what makes capacity usable at all.
 2. **Scale, spent where the data allows it**: width 160 / depth 8 / 8 heads (2,802,240 parameters,
-   still 4.3% of the 64 MiB asset budget), trained 38,400 steps.
+   16.8% of the 64 MiB asset budget), trained 38,400 steps.
 
 The position encoding is unchanged from v1: **rotary position embeddings (RoPE)** replacing the
 baseline's learned absolute position table. §4 re-establishes that ablation at the v2 configuration.
@@ -94,15 +94,16 @@ code revision, not across revisions that add modules.
 | **`rope`** | 2,802,240 | **1.5728 ± 0.0147** | 1.5722 / 1.5878 / 1.5584 |
 | `rope`, 38,400 steps (submitted) | 2,802,240 | **1.5307** | |
 
-**Table 2 — what each change was worth**, all at width 160 / depth 8 unless noted
+**Table 2 — what each change was worth.** All at width 160 / depth 8, 9,600 steps and seed 17
+unless stated, so rows compare like with like.
 
-| change | val BPB | effect |
+| step | val BPB | effect |
 |---|---:|---|
-| v1 shape, no dropout (width 128/depth 4, 4,800 steps) | 1.6945 | baseline for this table |
-| + RoPE retained, no dropout, 9,600 steps | 1.6751 | **−0.019**, and stale |
-| **+ dropout 0.1**, 9,600 steps | **1.5722** | **−0.103** ← the unlock |
-| + dropout 0.15 instead of 0.1 | 1.5737 | +0.002, over-regularised |
-| + 38,400 steps | **1.5307** | **−0.042** |
+| reference: v1 shape (width 128/depth 4), 4,800 steps | 1.6945 | |
+| reference: this shape, **no** dropout | 1.6751 | scaling alone is *worse* than not scaling |
+| **+ dropout 0.1** | **1.5722** | **−0.103** ← the unlock |
+| dropout 0.15 instead of 0.1 | 1.5737 | +0.002 — over-regularised |
+| **+ 38,400 steps** (submitted) | **1.5307** | **−0.042** |
 
 **Table 3 — frozen test scores** (CPU FP32)
 
@@ -157,8 +158,9 @@ but scores worse (1.5737 vs 1.5722). The gap is a diagnostic, not an objective.
 ## 5. Cost
 
 Separate CPU FP32 passes over the frozen checkpoints, `--threads 8`, measured back to back on an
-otherwise idle machine. The earlier figures in table 3 were taken while training was still running and
-are inflated; these are the ones to trust.
+otherwise idle machine. Timing is sensitive to what else is running: an earlier pass taken while
+training was still in flight read 31.7 s for the same model, which would have put the submission at
+4.7× and near the limit. The figures below are from the idle machine.
 
 **Table 4 — resource budgets**
 
@@ -207,7 +209,7 @@ configuration usable at all.
 - **Scale.** One corpus, one context length, one family of shapes. The conclusion "regularisation
   binds before capacity" is demonstrated for 1–3M parameters on 3.6M tokens; it should not be
   extrapolated past that.
-- **Step saturation.** 19,200 steps is better than 9,600, and the train/validation gap is still
+- **Step saturation.** 38,400 steps is better than 9,600, and the train/validation gap is still
   widening, so the curve has not flattened. More steps would very likely help further; the stopping
   point was set by time, not by evidence of saturation.
 
@@ -244,13 +246,10 @@ every default reproduces the original recipe.
 
 ### Acknowledgement of AI assistance
 
-Claude (Anthropic) was used as a coding and analysis assistant: drafting `rope.py` and the model and
-training changes; writing the experiment drivers, the peak-RAM probe and the log generator; and
-drafting this report. All experimental design decisions — the diagnosis that regularisation rather
-than capacity binds, the choice of dropout, the ablation structure, the seed policy, the rejection
-of the ensemble on budget grounds, and the interpretation in §4 and §6 — were reviewed and are the
-author's responsibility. Every number reported here was produced by the supplied harness on the
-hardware in §2 and can be regenerated with the commands above.
+Claude (Anthropic) was used as a coding and analysis assistant: it wrote the position-encoding and
+model changes and the experiment scripts, and drafted this report. The author set the objectives and
+the direction of the work, reviewed the changes, and is responsible for what is submitted. Every
+number here was produced by the supplied harness on the hardware in §2.
 
 ### References
 
