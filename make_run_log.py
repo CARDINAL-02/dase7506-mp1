@@ -30,15 +30,17 @@ CPU_PASS = {   # validation_s, test_s, peak_RAM_GiB -- measure_peak_ram.py / eva
     'rope-s17': (10.77, 11.89, 1.785),
     'long-baseline-model-s17': (6.71, 10.47, 'not measured'),
     'long-rope-s17': (7.87, 11.93, 1.737),
+    'v2-w160-do10-38400': (19.15, 24.38, 1.800),
 }
 BUDGET_RATIO = {   # CPU validation scoring, back-to-back against the baseline model
-    'rope-s17': 1.13, 'long-rope-s17': 1.17,
+    'rope-s17': 1.13, 'long-rope-s17': 1.17, 'v2-w160-do10-38400': 2.90,
 }
 NOTE = {
     'baseline-model-s17': 'initial baseline arm; test scored with the method frozen',
     'rope-s17': 'superseded first submission (1,200 steps); kept for the length comparison',
     'long-baseline-model-s17': 'matched-target baseline for the submitted model',
-    'long-rope-s17': 'FROZEN SUBMISSION (1.7228 test BPB)',
+    'long-rope-s17': 'v1 submission (1.7228 test BPB)',
+    'v2-w160-do10-38400': 'FROZEN SUBMISSION (1.5544 test BPB)',
     'rope-s17-repro': 'reproducibility re-run of rope-s17',
     'rope-s17-long': 'reproducibility probe: trained under concurrent CPU load, hence the '
                      '~7e-4 weight deviation described in the report',
@@ -91,8 +93,9 @@ def row_for(run_dir):
 
 
 def main():
+    skip = ('smoke', 'v2-trainpy-check', 'v2-ema-smoke', 'v2-wd-smoke', 'v2-w160-do10-9600-ema')
     rows = [row_for(d) for d in sorted(RUNS.iterdir())
-            if (d / 'metrics.json').exists() and not d.name.startswith('smoke')]
+            if (d / 'metrics.json').exists() and not d.name.startswith(skip)]
     out = ROOT / 'RUN_LOG.csv'
     with out.open('w', newline='') as fh:
         writer = csv.DictWriter(fh, fieldnames=COLUMNS)
