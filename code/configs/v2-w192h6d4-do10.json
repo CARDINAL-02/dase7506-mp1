@@ -1,0 +1,9 @@
+{
+  "vocab": 2048,
+  "context": 256,
+  "pos_mode": "rope",
+  "heads": 6,
+  "width": 192,
+  "depth": 4,
+  "dropout": 0.1
+}

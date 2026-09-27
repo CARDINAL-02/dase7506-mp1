@@ -24,6 +24,17 @@ def main():
     p.add_argument('--batch-size', type=int, default=32)
     p.add_argument('--eval-every', type=int, default=0,
                    help='Optional validation-curve interval; 0 evaluates only after training.')
+    # Optimisation options. Every default reproduces the original recipe, so runs
+    # made before these flags existed still reproduce exactly.
+    p.add_argument('--lr', type=float, default=.001)
+    p.add_argument('--weight-decay', type=float, default=.1)
+    p.add_argument('--wd-exclude-norms', action='store_true',
+                   help='Apply no weight decay to LayerNorm weights and to every bias. '
+                        'Off by default so the original recipe stays reproducible.')
+    p.add_argument('--ema-decay', type=float, default=0.0,
+                   help='Decay for an exponential moving average of the weights; 0 disables it. '
+                        'Averaging costs nothing at inference: the evaluator is handed an '
+                        'ordinary state dict.')
     args = p.parse_args()
     if args.steps < 1 or args.batch_size < 1:
         p.error('Batch size and step count must be positive.')
@@ -36,7 +47,15 @@ def main():
     config = json.loads(args.config.read_text())
     model, implementation_sha = make_model(args.implementation, config, device)
     args.run_dir.mkdir(parents=True, exist_ok=True)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=.001, weight_decay=.1)
+    if args.wd_exclude_norms:
+        # dim() >= 2 is exactly the Linear/Embedding weight matrices; norms and
+        # biases are 1-D. Decaying a LayerNorm gain toward zero is not a useful
+        # prior, and the supplied recipe applies it to every parameter.
+        groups = [{'params': [v for v in model.parameters() if v.dim() >= 2]},
+                  {'params': [v for v in model.parameters() if v.dim() < 2], 'weight_decay': 0.}]
+    else:
+        groups = [{'params': model.parameters()}]
+    optimizer = torch.optim.AdamW(groups, lr=args.lr, weight_decay=args.weight_decay)
     tokens = data['train'][0].to(device)
     rng = torch.Generator().manual_seed(args.seed)
     if device.type == 'cuda':
@@ -46,10 +65,14 @@ def main():
     history = []
     validation_history = []
     intermediate_validation_seconds = 0.
+    # Plain tensors, not parameters: they never enter the state dict, so the saved
+    # checkpoint stays loadable by torch.load(weights_only=True).
+    ema = ({name: value.detach().clone() for name, value in model.named_parameters()}
+           if args.ema_decay > 0 else None)
     for step in range(args.steps):
         starts = torch.randint(len(tokens)-257, (args.batch_size,), generator=rng).to(device)
         batch = tokens[starts[:,None]+torch.arange(257,device=device)]
-        learning_rate = .001 * min(1.,(step+1)/100) * (.1+.9*.5*(1+math.cos(math.pi*step/args.steps)))
+        learning_rate = args.lr * min(1.,(step+1)/100) * (.1+.9*.5*(1+math.cos(math.pi*step/args.steps)))
         for group in optimizer.param_groups:
             group['lr'] = learning_rate
         optimizer.zero_grad(set_to_none=True)
@@ -58,6 +81,9 @@ def main():
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(),1.)
         optimizer.step()
+        if ema is not None:
+            for name, value in model.named_parameters():
+                ema[name].mul_(args.ema_decay).add_(value.detach(), alpha=1-args.ema_decay)
         if (step+1)%100 == 0 or step+1 == args.steps:
             row = {'step':step+1,'loss':loss.item(),'seconds':time.perf_counter()-started-intermediate_validation_seconds}
             history.append(row)
@@ -71,6 +97,13 @@ def main():
     if device.type == 'cuda':
         torch.cuda.synchronize(device)
     train_seconds = time.perf_counter()-started-intermediate_validation_seconds
+    if ema is not None:
+        # Swap the averaged weights in before the final validation pass and the
+        # checkpoint write, so both the reported score and the saved bundle belong
+        # to the averaged model.
+        with torch.no_grad():
+            for name, value in model.named_parameters():
+                value.copy_(ema[name])
     validation = score(model,*data['validation'],device,'fp32')
     validation.pop('window_nll_nats')
     checkpoint = args.run_dir/'checkpoint.pt'
